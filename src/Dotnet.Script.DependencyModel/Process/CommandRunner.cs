@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using Dotnet.Script.DependencyModel.Logging;
 
 namespace Dotnet.Script.DependencyModel.Process
@@ -19,7 +20,7 @@ namespace Dotnet.Script.DependencyModel.Process
         {
             _logger.Debug($"Executing '{commandPath} {arguments}'");
             var startInformation = CreateProcessStartInfo(commandPath, arguments, workingDirectory);
-            var process = CreateProcess(startInformation);
+            using var process = CreateProcess(startInformation);
             RunAndWait(process);
             return process.ExitCode;
         }
@@ -27,12 +28,12 @@ namespace Dotnet.Script.DependencyModel.Process
         public CommandResult Capture(string commandPath, string arguments, string workingDirectory = null)
         {
             var startInformation = CreateProcessStartInfo(commandPath, arguments, workingDirectory);
-            var process = CreateProcess(startInformation);
+            using var process = CreateProcess(startInformation);
             process.Start();
-            var standardOut = process.StandardOutput.ReadToEnd();
-            var standardError = process.StandardError.ReadToEnd();
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
             process.WaitForExit();
-            return new CommandResult(process.ExitCode, standardOut, standardError);
+            return new CommandResult(process.ExitCode, stdoutTask.Result, stderrTask.Result);
         }
 
         private static ProcessStartInfo CreateProcessStartInfo(string commandPath, string arguments, string workingDirectory)
