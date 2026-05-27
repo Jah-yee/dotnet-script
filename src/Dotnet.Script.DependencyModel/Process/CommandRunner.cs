@@ -33,6 +33,33 @@ namespace Dotnet.Script.DependencyModel.Process
             using var process = CreateProcess(startInformation);
             process.Start();
             var (stdout, stderr) = ReadOutputSync(process, startInformation.RedirectStandardOutput);
+
+            if (!startInformation.RedirectStandardOutput && process.ExitCode != 0)
+            {
+                // On Unix, redirection is disabled to prevent EADDRNOTAVAIL. The command
+                // failed, so it is safe to retry with redirection to capture error details:
+                // no user script (and no CliWrap) will run after a failed restore —
+                // the caller will throw an exception that short-circuits execution.
+                return CaptureWithRedirect(commandPath, arguments, workingDirectory);
+            }
+            return new CommandResult(process.ExitCode, stdout, stderr);
+        }
+
+        private static CommandResult CaptureWithRedirect(string commandPath, string arguments, string workingDirectory)
+        {
+            var startInformation = new ProcessStartInfo(commandPath)
+            {
+                CreateNoWindow = true,
+                Arguments = arguments ?? "",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                WorkingDirectory = workingDirectory ?? System.Environment.CurrentDirectory
+            };
+            RemoveMsBuildEnvironmentVariables(startInformation.Environment);
+            using var process = CreateProcess(startInformation);
+            process.Start();
+            var (stdout, stderr) = ReadOutputSync(process, true);
             return new CommandResult(process.ExitCode, stdout, stderr);
         }
 
